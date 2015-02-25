@@ -4,20 +4,27 @@
 #include "XSUB.h"
 #include "perliol.h"
 
-IV push_utf8(pTHX_ PerlIO* f, const char* mode) {
-    PerlIO_funcs* encoding = PerlIO_find_layer(aTHX_ "utf8_strict", 11, 1);
+#ifndef STR_WITH_LEN
+#define STR_WITH_LEN(s) (s ""), (sizeof(s)-1)
+#endif
+
+static IV S_push_utf8(pTHX_ PerlIO* f, const char* mode) {
+    PerlIO_funcs* encoding = PerlIO_find_layer(aTHX_ STR_WITH_LEN("utf8_strict"), 1);
     return PerlIO_push(aTHX_ f, encoding, mode, NULL) == f ? 0 : -1;
 }
+#define push_utf8(f, mode) S_push_utf8(aTHX_ f, mode)
 
-IV push_encoding_sv(pTHX_ PerlIO* f, const char* mode, SV* encoding) {
-    PerlIO_funcs* layer = PerlIO_find_layer(aTHX_ "encoding", 8, 1);
+static IV S_push_encoding_sv(pTHX_ PerlIO* f, const char* mode, SV* encoding) {
+    PerlIO_funcs* layer = PerlIO_find_layer(aTHX_ STR_WITH_LEN("encoding"), 1);
     return PerlIO_push(aTHX_ f, layer , mode, encoding) == f ? 0 : -1;
 }
+#define push_encoding_sv(f, mode, encoding) S_push_encoding_sv(aTHX_ f, mode, encoding)
 
-IV push_encoding_pvn(pTHX_ PerlIO* f, const char* mode, const char* encoding_name, Size_t encoding_length) {
+static IV S_push_encoding_pvn(pTHX_ PerlIO* f, const char* mode, const char* encoding_name, Size_t encoding_length) {
 	SV* encoding = sv_2mortal(newSVpvn(encoding_name, encoding_length));
-	return push_encoding_sv(aTHX_ f, mode, encoding);
+	return push_encoding_sv(f, mode, encoding);
 }
+#define push_encoding_pvs(f, mode, encoding) S_push_encoding_pvn(aTHX_ f, mode, STR_WITH_LEN(encoding))
 
 static IV PerlIOBom_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_funcs *tab)
 {
@@ -28,23 +35,23 @@ static IV PerlIOBom_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_fu
 			char* buffer = PerlIO_get_ptr(f);
 			if (memcmp(buffer, "\xEF\xBB\xBF", 3) == 0) {
 				PerlIO_set_ptrcnt(f, buffer + 3, count - 3);
-				return push_utf8(aTHX_ f, mode);
+				return push_utf8(f, mode);
 			}
 			else if (memcmp(buffer, "\x00\x00\xFE\xFF", 4) == 0) {
 				PerlIO_set_ptrcnt(f, buffer + 4, count - 4);
-				return push_encoding_pvn(aTHX_ f, mode, STR_WITH_LEN("UTF32-BE"));
+				return push_encoding_pvs(f, mode, "UTF32-BE");
 			}
 			else if (memcmp(buffer, "\xFF\xFE\x00\x00", 4) == 0) {
 				PerlIO_set_ptrcnt(f, buffer + 4, count - 4);
-				return push_encoding_pvn(aTHX_ f, mode, STR_WITH_LEN("UTF32-LE"));
+				return push_encoding_pvs(f, mode, "UTF32-LE");
 			}
 			else if (memcmp(buffer, "\xFE\xFF", 2) == 0) {
 				PerlIO_set_ptrcnt(f, buffer + 2, count - 2);
-				return push_encoding_pvn(aTHX_ f, mode, STR_WITH_LEN("UTF16-BE"));
+				return push_encoding_pvs(f, mode, "UTF16-BE");
 			}
 			else if (memcmp(buffer, "\xFF\xFE", 2) == 0) {
 				PerlIO_set_ptrcnt(f, buffer + 2, count - 2);
-				return push_encoding_pvn(aTHX_ f, mode, STR_WITH_LEN("UTF16-LE"));
+				return push_encoding_pvs(f, mode, "UTF16-LE");
 			}
 			else if (arg && SvOK(arg)) {
 				STRLEN len;
@@ -54,10 +61,10 @@ static IV PerlIOBom_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_fu
 					(memcmp(fallback, "utf", 3) == 0 || memcmp(fallback, "UTF", 3) == 0) &&
 					fallback[3] == '8' || (fallback[3] == '-' && fallback[4] == '8')
 				) {
-					return push_utf8(aTHX_ f, mode);
+					return push_utf8(f, mode);
 				}
 				else {
-					return push_encoding_sv(aTHX_ f, mode, arg);
+					return push_encoding_sv(f, mode, arg);
 				}
 			}
 			else {
