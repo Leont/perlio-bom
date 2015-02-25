@@ -19,12 +19,7 @@ static IV S_push_encoding_sv(pTHX_ PerlIO* f, const char* mode, SV* encoding) {
     return PerlIO_push(aTHX_ f, layer , mode, encoding) == f ? 0 : -1;
 }
 #define push_encoding_sv(f, mode, encoding) S_push_encoding_sv(aTHX_ f, mode, encoding)
-
-static IV S_push_encoding_pvn(pTHX_ PerlIO* f, const char* mode, const char* encoding_name, Size_t encoding_length) {
-	SV* encoding = sv_2mortal(newSVpvn(encoding_name, encoding_length));
-	return push_encoding_sv(f, mode, encoding);
-}
-#define push_encoding_pvs(f, mode, encoding) S_push_encoding_pvn(aTHX_ f, mode, STR_WITH_LEN(encoding))
+#define push_encoding_pvs(f, mode, encoding) push_encoding_sv(f, mode, sv_2mortal(newSVpvs(encoding)))
 
 static IV PerlIOBom_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_funcs *tab)
 {
