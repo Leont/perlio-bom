@@ -22,52 +22,59 @@ static IV S_push_encoding_sv(pTHX_ PerlIO* f, const char* mode, SV* encoding) {
 #define push_encoding_pvs(f, mode, encoding) push_encoding_sv(f, mode, sv_2mortal(newSVpvs(encoding)))
 
 static IV PerlIOBom_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_funcs *tab) {
-	if (PerlIOValid(f) && PerlIO_fast_gets(f)) {
-		PerlIO_fill(f);
-		Size_t count = PerlIO_get_cnt(f);
-		if (count > 4) {
-			char* buffer = PerlIO_get_ptr(f);
-			if (memcmp(buffer, "\xEF\xBB\xBF", 3) == 0) {
-				PerlIO_set_ptrcnt(f, buffer + 3, count - 3);
-				return push_utf8(f, mode);
-			}
-			else if (memcmp(buffer, "\x00\x00\xFE\xFF", 4) == 0) {
-				PerlIO_set_ptrcnt(f, buffer + 4, count - 4);
-				return push_encoding_pvs(f, mode, "UTF32-BE");
-			}
-			else if (memcmp(buffer, "\xFF\xFE\x00\x00", 4) == 0) {
-				PerlIO_set_ptrcnt(f, buffer + 4, count - 4);
-				return push_encoding_pvs(f, mode, "UTF32-LE");
-			}
-			else if (memcmp(buffer, "\xFE\xFF", 2) == 0) {
-				PerlIO_set_ptrcnt(f, buffer + 2, count - 2);
-				return push_encoding_pvs(f, mode, "UTF16-BE");
-			}
-			else if (memcmp(buffer, "\xFF\xFE", 2) == 0) {
-				PerlIO_set_ptrcnt(f, buffer + 2, count - 2);
-				return push_encoding_pvs(f, mode, "UTF16-LE");
-			}
-			else if (arg && SvOK(arg)) {
-				STRLEN len;
-				const char* fallback = SvPV(arg, len);
-				if (
-					len >= 4 &&
-					(memcmp(fallback, "utf", 3) == 0 || memcmp(fallback, "UTF", 3) == 0) &&
-					fallback[3] == '8' || (len >= 5 && fallback[3] == '-' && fallback[4] == '8')
-				) {
-					return push_utf8(f, mode);
-				}
-				else {
-					return push_encoding_sv(f, mode, arg);
-				}
-			}
-			else {
-				errno = EILSEQ;
-				return -1;
-			}
+	if (!PerlIOValid(f))
+		return -1;
+	else if (!PerlIO_fast_gets(f)) {
+		char mode[8];
+		PerlIO_push(aTHX_ f, &PerlIO_perlio, PerlIO_modestr(f,mode), Nullsv);
+		if (!f) {
+			Perl_warn(aTHX_ "panic: cannot push :perlio for %p",f);
+			return -1;
 		}
 	}
-	return -1;
+	PerlIO_fill(f);
+	Size_t count = PerlIO_get_cnt(f);
+	if (count > 4) {
+		char* buffer = PerlIO_get_ptr(f);
+		if (memcmp(buffer, "\xEF\xBB\xBF", 3) == 0) {
+			PerlIO_set_ptrcnt(f, buffer + 3, count - 3);
+			return push_utf8(f, mode);
+		}
+		else if (memcmp(buffer, "\x00\x00\xFE\xFF", 4) == 0) {
+			PerlIO_set_ptrcnt(f, buffer + 4, count - 4);
+			return push_encoding_pvs(f, mode, "UTF32-BE");
+		}
+		else if (memcmp(buffer, "\xFF\xFE\x00\x00", 4) == 0) {
+			PerlIO_set_ptrcnt(f, buffer + 4, count - 4);
+			return push_encoding_pvs(f, mode, "UTF32-LE");
+		}
+		else if (memcmp(buffer, "\xFE\xFF", 2) == 0) {
+			PerlIO_set_ptrcnt(f, buffer + 2, count - 2);
+			return push_encoding_pvs(f, mode, "UTF16-BE");
+		}
+		else if (memcmp(buffer, "\xFF\xFE", 2) == 0) {
+			PerlIO_set_ptrcnt(f, buffer + 2, count - 2);
+			return push_encoding_pvs(f, mode, "UTF16-LE");
+		}
+		else if (arg && SvOK(arg)) {
+			STRLEN len;
+			const char* fallback = SvPV(arg, len);
+			if (
+				len >= 4 &&
+				(memcmp(fallback, "utf", 3) == 0 || memcmp(fallback, "UTF", 3) == 0) &&
+				fallback[3] == '8' || (len >= 5 && fallback[3] == '-' && fallback[4] == '8')
+			) {
+				return push_utf8(f, mode);
+			}
+			else {
+				return push_encoding_sv(f, mode, arg);
+			}
+		}
+		else {
+			errno = EILSEQ;
+			return -1;
+		}
+	}
 }
 
 PerlIO_funcs PerlIO_bom = {
