@@ -70,10 +70,8 @@ static IV PerlIOBom_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_fu
 				return push_encoding_sv(f, mode, arg);
 			}
 		}
-		else {
-			errno = EILSEQ;
-			return -1;
-		}
+		else
+			return push_utf8(f, mode);
 	}
 }
 
