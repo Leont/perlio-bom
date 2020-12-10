@@ -44,7 +44,7 @@ static IV PerlIOBom_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_fu
 			return -1;
 		}
 	}
-	if (mode[0] == 'r') {
+	if (mode[0] == 'r' || mode[0] == 'w' && mode[1] == '+') {
 		PerlIO_fill(f);
 		Size_t count = PerlIO_get_cnt(f);
 		if (count > 4) {
