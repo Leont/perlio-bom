@@ -21,8 +21,7 @@ static IV S_push_encoding_sv(pTHX_ PerlIO* f, const char* mode, SV* encoding) {
 #define push_encoding_sv(f, mode, encoding) S_push_encoding_sv(aTHX_ f, mode, encoding)
 #define push_encoding_pvs(f, mode, encoding) push_encoding_sv(f, mode, sv_2mortal(newSVpvs(encoding)))
 
-static IV PerlIOBom_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_funcs *tab)
-{
+static IV PerlIOBom_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_funcs *tab) {
 	if (PerlIOValid(f) && PerlIO_fast_gets(f)) {
 		PerlIO_fill(f);
 		Size_t count = PerlIO_get_cnt(f);
@@ -54,7 +53,7 @@ static IV PerlIOBom_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_fu
 				if (
 					len >= 4 &&
 					(memcmp(fallback, "utf", 3) == 0 || memcmp(fallback, "UTF", 3) == 0) &&
-					fallback[3] == '8' || (fallback[3] == '-' && fallback[4] == '8')
+					fallback[3] == '8' || (len >= 5 && fallback[3] == '-' && fallback[4] == '8')
 				) {
 					return push_utf8(f, mode);
 				}
