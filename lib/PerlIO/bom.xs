@@ -44,35 +44,47 @@ static IV PerlIOBom_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_fu
 			return -1;
 		}
 	}
-	PerlIO_fill(f);
-	Size_t count = PerlIO_get_cnt(f);
-	if (count > 4) {
-		char* buffer = PerlIO_get_ptr(f);
-		if (memcmp(buffer, "\xEF\xBB\xBF", 3) == 0) {
-			PerlIO_set_ptrcnt(f, buffer + 3, count - 3);
-			return push_utf8(f, mode);
+	if (mode[0] == 'r') {
+		PerlIO_fill(f);
+		Size_t count = PerlIO_get_cnt(f);
+		if (count > 4) {
+			char* buffer = PerlIO_get_ptr(f);
+			if (memcmp(buffer, "\xEF\xBB\xBF", 3) == 0) {
+				PerlIO_set_ptrcnt(f, buffer + 3, count - 3);
+				return push_utf8(f, mode);
+			}
+			else if (memcmp(buffer, "\x00\x00\xFE\xFF", 4) == 0) {
+				PerlIO_set_ptrcnt(f, buffer + 4, count - 4);
+				return push_encoding_pvs(f, mode, "UTF32-BE");
+			}
+			else if (memcmp(buffer, "\xFF\xFE\x00\x00", 4) == 0) {
+				PerlIO_set_ptrcnt(f, buffer + 4, count - 4);
+				return push_encoding_pvs(f, mode, "UTF32-LE");
+			}
+			else if (memcmp(buffer, "\xFE\xFF", 2) == 0) {
+				PerlIO_set_ptrcnt(f, buffer + 2, count - 2);
+				return push_encoding_pvs(f, mode, "UTF16-BE");
+			}
+			else if (memcmp(buffer, "\xFF\xFE", 2) == 0) {
+				PerlIO_set_ptrcnt(f, buffer + 2, count - 2);
+				return push_encoding_pvs(f, mode, "UTF16-LE");
+			}
+			if (is_utf8(arg))
+				return push_utf8(f, mode);
+			else
+				return push_encoding_sv(f, mode, arg);
 		}
-		else if (memcmp(buffer, "\x00\x00\xFE\xFF", 4) == 0) {
-			PerlIO_set_ptrcnt(f, buffer + 4, count - 4);
-			return push_encoding_pvs(f, mode, "UTF32-BE");
-		}
-		else if (memcmp(buffer, "\xFF\xFE\x00\x00", 4) == 0) {
-			PerlIO_set_ptrcnt(f, buffer + 4, count - 4);
-			return push_encoding_pvs(f, mode, "UTF32-LE");
-		}
-		else if (memcmp(buffer, "\xFE\xFF", 2) == 0) {
-			PerlIO_set_ptrcnt(f, buffer + 2, count - 2);
-			return push_encoding_pvs(f, mode, "UTF16-BE");
-		}
-		else if (memcmp(buffer, "\xFF\xFE", 2) == 0) {
-			PerlIO_set_ptrcnt(f, buffer + 2, count - 2);
-			return push_encoding_pvs(f, mode, "UTF16-LE");
-		}
-		if (is_utf8(arg))
-			return push_utf8(f, mode);
-		else
-			return push_encoding_sv(f, mode, arg);
 	}
+	else if (mode[0] == 'w') {
+		if (!arg || SvOK(arg) && !is_utf8(arg))
+			push_encoding_sv(f, mode, arg);
+		else
+			push_utf8(f, mode);
+
+		return PerlIO_write(f, "\xEF\xBB\xBF", 3) == 3 ? 0 : -1;
+	}
+	else
+		return -1;
 }
 
 PerlIO_funcs PerlIO_bom = {
